@@ -2,7 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from psycopg import AsyncConnection
 
 from app.core.database import get_db
 from app.core.exceptions import ConflictException, ForbiddenException, ResourceNotFoundException
@@ -22,10 +22,10 @@ router = APIRouter(prefix="/users", tags=["Users"])
 )
 async def create_user(
     payload: UserCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    conn: Annotated[AsyncConnection, Depends(get_db)],
 ) -> UserResponse:
     try:
-        return await user_service.create(db, payload)
+        return await user_service.create(conn, payload)
     except ConflictException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=e.detail)
 
@@ -36,11 +36,11 @@ async def create_user(
     summary="List all users (admin only)",
 )
 async def list_users(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    conn: Annotated[AsyncConnection, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserListResponse:
     try:
-        users = await user_service.get_all(db, current_user)
+        users = await user_service.get_all(conn, current_user)
         return UserListResponse(total=len(users), items=users)
     except ForbiddenException as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=e.detail)
@@ -64,11 +64,11 @@ async def get_me(
 )
 async def get_user(
     user_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    conn: Annotated[AsyncConnection, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
     try:
-        return await user_service.get_by_id(db, user_id, current_user)
+        return await user_service.get_by_id(conn, user_id, current_user)
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.detail)
     except ForbiddenException as e:
@@ -83,11 +83,11 @@ async def get_user(
 async def update_user(
     user_id: UUID,
     payload: UserUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    conn: Annotated[AsyncConnection, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
     try:
-        return await user_service.update(db, user_id, payload, current_user)
+        return await user_service.update(conn, user_id, payload, current_user)
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.detail)
     except ForbiddenException as e:
@@ -101,11 +101,11 @@ async def update_user(
 )
 async def delete_user(
     user_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    conn: Annotated[AsyncConnection, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
     try:
-        await user_service.delete(db, user_id, current_user)
+        await user_service.delete(conn, user_id, current_user)
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.detail)
     except ForbiddenException as e:

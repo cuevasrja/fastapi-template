@@ -36,6 +36,10 @@ migrate-status:
 migrate-history:
     alembic history --verbose
 
+# List installed PostgreSQL extensions
+db-extensions:
+    docker exec fastapi_postgres psql -U postgres -d fastapi_db -c "\dx"
+
 # Start local PostgreSQL via Docker Compose
 db-up:
     docker compose up -d db
@@ -43,6 +47,12 @@ db-up:
 # Stop local PostgreSQL
 db-down:
     docker compose down
+
+# Rebuild containers (pull new images and recreate, preserves volumes)
+rebuild:
+    docker compose down
+    docker compose pull
+    docker compose up -d
 
 # Reset local database (destructive!)
 db-reset:

@@ -1,41 +1,55 @@
+import psycopg
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.database import Base, get_db
+from app.core.database import get_db
 from app.main import app
 
-TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_test"
+TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/fastapi_test"
 
-test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-TestSessionLocal = async_sessionmaker(
-    bind=test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+_CREATE_SCHEMA = """
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS users (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    email       VARCHAR(255) NOT NULL UNIQUE,
+    hashed_password VARCHAR(255) NOT NULL,
+    full_name   VARCHAR(100) NOT NULL,
+    role        VARCHAR(50)  NOT NULL DEFAULT 'user',
+    is_active   BOOLEAN      NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_users_email ON users (email);
+"""
+
+_DROP_SCHEMA = "DROP TABLE IF EXISTS users;"
 
 
 @pytest.fixture(scope="session", autouse=True)
 async def setup_db():
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    conn = await psycopg.AsyncConnection.connect(TEST_DATABASE_URL, autocommit=True)
+    await conn.execute(_CREATE_SCHEMA)
+    await conn.close()
     yield
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await test_engine.dispose()
+    conn = await psycopg.AsyncConnection.connect(TEST_DATABASE_URL, autocommit=True)
+    await conn.execute(_DROP_SCHEMA)
+    await conn.close()
 
 
 @pytest.fixture
 async def db_session():
-    async with TestSessionLocal() as session:
-        yield session
-        await session.rollback()
+    conn = await psycopg.AsyncConnection.connect(TEST_DATABASE_URL)
+    try:
+        yield conn
+        await conn.rollback()
+    finally:
+        await conn.close()
 
 
 @pytest.fixture
-async def client(db_session: AsyncSession):
+async def client(db_session: psycopg.AsyncConnection):
     async def override_get_db():
         yield db_session
 

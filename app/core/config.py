@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_db"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/fastapi_db"
 
     # JWT
     SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"

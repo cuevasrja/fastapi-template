@@ -1,5 +1,5 @@
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
 
 from app.core.exceptions import UnauthorizedException
 from app.core.security import create_access_token, verify_password
@@ -7,9 +7,10 @@ from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
 
 
-async def login(db: AsyncSession, payload: LoginRequest) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalar_one_or_none()
+async def login(conn: AsyncConnection, payload: LoginRequest) -> TokenResponse:
+    async with conn.cursor(row_factory=class_row(User)) as cur:
+        await cur.execute("SELECT * FROM users WHERE email = %s", (payload.email,))
+        user = await cur.fetchone()
 
     if not user or not verify_password(payload.password.get_secret_value(), user.hashed_password):
         raise UnauthorizedException("Invalid email or password")

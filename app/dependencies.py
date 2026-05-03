@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
@@ -14,7 +14,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 async def get_current_user(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    conn: Annotated[AsyncConnection, Depends(get_db)],
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> User:
     credentials_exception = HTTPException(
@@ -30,8 +30,10 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user or not user.is_active:
+    async with conn.cursor(row_factory=class_row(User)) as cur:
+        await cur.execute("SELECT * FROM users WHERE id = %s AND is_active = true", (user_id,))
+        user = await cur.fetchone()
+
+    if not user:
         raise credentials_exception
     return user
